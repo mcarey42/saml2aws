@@ -77,8 +77,8 @@ func PromptForLoginDetails(loginDetails *creds.LoginDetails, provider string) er
 			log.Println("")
 		}
 		if loginDetails.ClientSecret == "" {
-			if enteredCientSecret := prompter.Password("Client Secret"); enteredCientSecret != "" {
-				loginDetails.ClientSecret = enteredCientSecret
+			if enteredClientSecret := prompter.Password("Client Secret"); enteredClientSecret != "" {
+				loginDetails.ClientSecret = enteredClientSecret
 			}
 			log.Println("")
 		}

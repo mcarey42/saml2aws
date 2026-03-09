@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,10 +17,25 @@ import (
 	"github.com/versent/saml2aws/v2/pkg/flags"
 )
 
-const (
-	federationURL = "https://signin.aws.amazon.com/federation"
-	issuer        = "saml2aws"
-)
+const issuer = "saml2aws"
+
+// partitionURLs returns the federation and console base URLs for the given AWS region.
+func partitionURLs(region string) (federationURL, consoleURL string) {
+	switch {
+	case strings.HasPrefix(region, "us-gov-"):
+		return "https://signin.amazonaws-us-gov.com/federation",
+			"https://console.amazonaws-us-gov.com/"
+	case strings.HasPrefix(region, "cn-"):
+		return "https://signin.amazonaws.cn/federation",
+			"https://console.amazonaws.cn/"
+	case strings.HasPrefix(region, "eusc-"):
+		return "https://signin.amazonaws.eu/federation",
+			"https://console.amazonaws.eu/"
+	default:
+		return "https://signin.aws.amazon.com/federation",
+			"https://console.aws.amazon.com/"
+	}
+}
 
 // Console open the aws console from the CLI
 func Console(consoleFlags *flags.ConsoleFlags) error {
@@ -58,7 +74,8 @@ func Console(consoleFlags *flags.ConsoleFlags) error {
 		}
 	}
 
-	log.Printf("Presenting credentials for %s to %s", account.Profile, federationURL)
+	fedURL, _ := partitionURLs(awsCreds.Region)
+	log.Printf("Presenting credentials for %s to %s", account.Profile, fedURL)
 	return federatedLogin(awsCreds, consoleFlags)
 }
 
@@ -108,6 +125,8 @@ func loginRefreshCredentials(sharedCreds *awsconfig.CredentialsProvider, execFla
 }
 
 func federatedLogin(creds *awsconfig.AWSCredentials, consoleFlags *flags.ConsoleFlags) error {
+	federationURL, consoleURL := partitionURLs(creds.Region)
+
 	jsonBytes, err := json.Marshal(map[string]string{
 		"sessionId":    creds.AWSAccessKey,
 		"sessionKey":   creds.AWSSecretKey,
@@ -152,13 +171,11 @@ func federatedLogin(creds *awsconfig.AWSCredentials, consoleFlags *flags.Console
 		return err
 	}
 
-	destination := "https://console.aws.amazon.com/"
-
 	loginURL := fmt.Sprintf(
 		"%s?Action=login&Issuer=%s&Destination=%s&SigninToken=%s",
 		federationURL,
 		issuer,
-		url.QueryEscape(destination),
+		url.QueryEscape(consoleURL),
 		url.QueryEscape(signinToken),
 	)
 
