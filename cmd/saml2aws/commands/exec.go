@@ -6,10 +6,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"context"
+	stderrors "errors"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	smithy "github.com/aws/smithy-go"
 	"github.com/pkg/errors"
 	"github.com/versent/saml2aws/v2/pkg/awsconfig"
 	"github.com/versent/saml2aws/v2/pkg/flags"
@@ -79,31 +82,29 @@ func Exec(execFlags *flags.LoginExecFlags, cmdline []string) error {
 // This is extremely useful in the case of a central "authentication account" which then requires secondary, and
 // often tertiary, role assumptions to acquire credentials for the target role.
 func assumeRoleWithProfile(targetProfile string, sessionDuration int) (*awsconfig.AWSCredentials, error) {
-	// AWS session config with verbose errors on chained credential errors
-	config := *aws.NewConfig().WithCredentialsChainVerboseErrors(true)
+	ctx := context.Background()
 	duration, _ := time.ParseDuration(strconv.Itoa(sessionDuration) + "s")
 
-	// a session forcing usage of the aws config file, sets the target profile which will be found in the config
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config:             config,
-		Profile:            targetProfile,
-		SharedConfigState:  session.SharedConfigEnable,
-		AssumeRoleDuration: duration,
-	}))
-
-	// use an STS client to perform the multiple role assumptions
-	stsClient := sts.New(sess)
-	input := &sts.GetCallerIdentityInput{}
-	_, err := stsClient.GetCallerIdentity(input)
+	// Load config forcing usage of the aws config file with the target profile.
+	// WithAssumeRoleCredentialOptions sets the session duration for chained role assumptions.
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithSharedConfigProfile(targetProfile),
+		config.WithAssumeRoleCredentialOptions(func(opts *stscreds.AssumeRoleOptions) {
+			opts.Duration = duration
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	creds, err := sess.Config.Credentials.Get()
+	// Use an STS client to perform the multiple role assumptions
+	stsClient := sts.NewFromConfig(awsCfg)
+	_, err = stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
 		return nil, err
 	}
-	expiredAt, err := sess.Config.Credentials.ExpiresAt()
+
+	creds, err := awsCfg.Credentials.Retrieve(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -112,31 +113,34 @@ func assumeRoleWithProfile(targetProfile string, sessionDuration int) (*awsconfi
 		AWSAccessKey:    creds.AccessKeyID,
 		AWSSecretKey:    creds.SecretAccessKey,
 		AWSSessionToken: creds.SessionToken,
-		Expires:         expiredAt,
+		Expires:         creds.Expires,
 	}, nil
 }
 
 func checkToken(profile string) (bool, error) {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile: profile,
-	})
+	ctx := context.Background()
+
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithSharedConfigProfile(profile),
+	)
 	if err != nil {
 		return false, err
 	}
 
-	svc := sts.New(sess)
+	svc := sts.NewFromConfig(awsCfg)
 
-	params := &sts.GetCallerIdentityInput{}
-
-	_, err = svc.GetCallerIdentity(params)
+	_, err = svc.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			if awsErr.Code() == "ExpiredToken" || awsErr.Code() == "NoCredentialProviders" {
+		var apiErr smithy.APIError
+		if stderrors.As(err, &apiErr) {
+			// Expired token or no credential providers -> needs re-login
+			if apiErr.ErrorCode() == "ExpiredTokenException" || apiErr.ErrorCode() == "ExpiredToken" {
 				return false, nil
 			}
+			return false, err
 		}
-
-		return false, err
+		// Non-API errors (e.g. credential provider chain found no credentials) -> needs re-login
+		return false, nil
 	}
 
 	return true, nil

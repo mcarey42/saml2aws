@@ -9,9 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/versent/saml2aws/v2"
@@ -356,21 +359,22 @@ func resolveRole(awsRoles []*saml2aws.AWSRole, samlAssertion string, account *cf
 }
 
 func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAssertion string) (*awsconfig.AWSCredentials, error) {
+	ctx := context.Background()
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: &account.Region,
-	})
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(account.Region),
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create session.")
 	}
 
-	svc := sts.New(sess)
+	svc := sts.NewFromConfig(awsCfg)
 
 	params := &sts.AssumeRoleWithSAMLInput{
 		PrincipalArn:    aws.String(role.PrincipalARN), // Required
 		RoleArn:         aws.String(role.RoleARN),      // Required
 		SAMLAssertion:   aws.String(samlAssertion),     // Required
-		DurationSeconds: aws.Int64(int64(account.SessionDuration)),
+		DurationSeconds: aws.Int32(int32(account.SessionDuration)),
 	}
 
 	if account.PolicyFile != "" {
@@ -382,27 +386,27 @@ func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAs
 	}
 
 	if account.PolicyARNs != "" {
-		var arns []*sts.PolicyDescriptorType
+		var arns []types.PolicyDescriptorType
 		for _, arn := range strings.Split(account.PolicyARNs, ",") {
-			arns = append(arns, &sts.PolicyDescriptorType{Arn: aws.String(arn)})
+			arns = append(arns, types.PolicyDescriptorType{Arn: aws.String(arn)})
 		}
 		params.PolicyArns = arns
 	}
 
 	log.Println("Requesting AWS credentials using SAML assertion.")
 
-	resp, err := svc.AssumeRoleWithSAML(params)
+	resp, err := svc.AssumeRoleWithSAML(ctx, params)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error retrieving STS credentials using SAML.")
 	}
 
 	return &awsconfig.AWSCredentials{
-		AWSAccessKey:     aws.StringValue(resp.Credentials.AccessKeyId),
-		AWSSecretKey:     aws.StringValue(resp.Credentials.SecretAccessKey),
-		AWSSessionToken:  aws.StringValue(resp.Credentials.SessionToken),
-		AWSSecurityToken: aws.StringValue(resp.Credentials.SessionToken),
-		PrincipalARN:     aws.StringValue(resp.AssumedRoleUser.Arn),
-		Expires:          resp.Credentials.Expiration.Local(),
+		AWSAccessKey:     aws.ToString(resp.Credentials.AccessKeyId),
+		AWSSecretKey:     aws.ToString(resp.Credentials.SecretAccessKey),
+		AWSSessionToken:  aws.ToString(resp.Credentials.SessionToken),
+		AWSSecurityToken: aws.ToString(resp.Credentials.SessionToken),
+		PrincipalARN:     aws.ToString(resp.AssumedRoleUser.Arn),
+		Expires:          aws.ToTime(resp.Credentials.Expiration).Local(),
 		Region:           account.Region,
 	}, nil
 }
