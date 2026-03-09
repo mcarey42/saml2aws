@@ -18,8 +18,11 @@ const (
 	DefaultConfigPath = "~/.saml2aws"
 
 	// DefaultAmazonWebservicesURN URN used when authenticating to aws using SAML
-	// NOTE: This only needs to be changed to log into GovCloud
+	// NOTE: This only needs to be changed to log into GovCloud or other partitions
 	DefaultAmazonWebservicesURN = "urn:amazon:webservices"
+
+	// DefaultAmazonWebservicesURNEUSC URN used when authenticating to the AWS EU Sovereign Cloud partition (aws-eusc)
+	DefaultAmazonWebservicesURNEUSC = "urn:amazon:webservices:eusc"
 
 	// DefaultSessionDuration this is the default session duration which can be overridden in the AWS console
 	// see https://aws.amazon.com/blogs/security/enable-federated-api-access-to-your-aws-resources-for-up-to-12-hours-using-iam-roles/

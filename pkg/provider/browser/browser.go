@@ -252,7 +252,8 @@ func signinRegex() (*regexp.Regexp, error) {
 	// https://docs.aws.amazon.com/general/latest/gr/signin-service.html
 	// https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-Ningxia.html
 	// https://docs.amazonaws.cn/en_us/aws/latest/userguide/endpoints-Beijing.html
-	return regexp.Compile(`https:\/\/((.*\.)?signin\.(aws\.amazon\.com|amazonaws-us-gov\.com|amazonaws\.cn))\/saml`)
+	// https://docs.amazonaws.eu/ (AWS EU Sovereign Cloud)
+	return regexp.Compile(`https:\/\/((.*\.)?signin\.(aws\.amazon\.com|amazonaws-us-gov\.com|amazonaws\.cn|amazonaws\.eu))\/saml`)
 }
 
 func (cl *Client) Validate(loginDetails *creds.LoginDetails) error {

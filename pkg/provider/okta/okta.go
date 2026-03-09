@@ -667,6 +667,7 @@ func docIsFormRedirectToTarget(doc *goquery.Document, target string) bool {
 		urls = []string{"form[action=\"https://signin.aws.amazon.com/saml\"]",
 			"form[action=\"https://signin.amazonaws-us-gov.com/saml\"]",
 			"form[action=\"https://signin.amazonaws.cn/saml\"]",
+			"form[action=\"https://signin.amazonaws.eu/saml\"]",
 		}
 	}
 

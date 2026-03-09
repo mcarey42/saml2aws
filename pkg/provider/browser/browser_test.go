@@ -123,6 +123,17 @@ func TestSigninRegexFail(t *testing.T) {
 	assert.False(t, match)
 }
 
+func TestSigninRegexEUSC(t *testing.T) {
+	regex, err := signinRegex()
+	assert.Nil(t, err)
+	// Base EUSC signin endpoint
+	assert.True(t, regex.MatchString("https://signin.amazonaws.eu/saml"))
+	// Region-prefixed EUSC signin endpoint (e.g. eusc-de-east-1)
+	assert.True(t, regex.MatchString("https://eusc-de-east-1.signin.amazonaws.eu/saml"))
+	// Must not match unrelated .eu domains
+	assert.False(t, regex.MatchString("https://signin.example.eu/saml"))
+}
+
 func TestGetSAMLResponse(t *testing.T) {
 	samlp := `
 	<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_8e8dc5f69a98cc4c1ff3427e5ce34606fd672f91e6" Version="2.0" IssueInstant="2014-07-17T01:01:48Z" Destination="http://sp.example.com/demo1/index.php?acs" InResponseTo="ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685">
