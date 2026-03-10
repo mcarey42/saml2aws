@@ -12,7 +12,6 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/pkg/errors"
@@ -361,21 +360,14 @@ func resolveRole(awsRoles []*saml2aws.AWSRole, samlAssertion string, account *cf
 func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAssertion string) (*awsconfig.AWSCredentials, error) {
 	ctx := context.Background()
 
-	// SDK v1 -> v2 porting note: Unlike SDK v1's session.NewSession, the v2 SDK's
-	// LoadDefaultConfig eager loads and validates *all* profiles.  Any profile errors
-	// become fatal.  Since we're already authenticated, we don't actually need any additional
-	// information from the Config/Cred files, so we pass empty arrays and anonymous credentials.
-	// AnonymousCredentials bypasses AWS_PROFILE-driven credential resolution entirely, which is
-	// correct here because AssumeRoleWithSAML authenticates via the SAML assertion, not via
-	// existing AWS credentials.
-	awsCfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(account.Region),
-		config.WithSharedConfigFiles([]string{}),
-		config.WithSharedCredentialsFiles([]string{}),
-		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create session.")
+	// AssumeRoleWithSAML authenticates via the SAML assertion — no existing AWS credentials
+	// are required or desired.  Bypassing LoadDefaultConfig entirely avoids the SDK's profile
+	// resolution machinery (which reads AWS_PROFILE, ~/.aws/config, etc.) and the
+	// "failed to get shared config profile" errors that result when AWS_PROFILE is set to a
+	// profile that doesn't exist in the local config files.
+	awsCfg := aws.Config{
+		Region:      account.Region,
+		Credentials: aws.AnonymousCredentials{},
 	}
 
 	svc := sts.NewFromConfig(awsCfg)
