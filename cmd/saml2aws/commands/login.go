@@ -363,13 +363,13 @@ func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAs
 
 	// SDK v1 -> v2 porting note: Unlike SDK v1's session.NewSession, the v2 SDK's
 	// LoadDefaultConfig eager loads and validates *all* profiles.  Any profile errors
-	// become fatal.  Since we're already authenticated, we don't actually need any aditional 
+	// become fatal.  Since we're already authenticated, we don't actually need any aditional
 	// information from the Config/Cred files, so we can just pass empty arrays and resolve
 	// the problem.
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(account.Region),
 		config.WithSharedConfigFiles([]string{}),
-		config.WithSharedCredentialFiles([]string{}),
+		config.WithSharedConfigFiles([]string{}),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create session.")
