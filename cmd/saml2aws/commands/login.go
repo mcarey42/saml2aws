@@ -369,7 +369,7 @@ func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAs
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(account.Region),
 		config.WithSharedConfigFiles([]string{}),
-		config.WithSharedConfigFiles([]string{}),
+		config.WithSharedCredentialsFiles([]string{}),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create session.")
