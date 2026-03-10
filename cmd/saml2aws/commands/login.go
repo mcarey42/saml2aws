@@ -363,13 +363,16 @@ func loginToStsUsingRole(account *cfg.IDPAccount, role *saml2aws.AWSRole, samlAs
 
 	// SDK v1 -> v2 porting note: Unlike SDK v1's session.NewSession, the v2 SDK's
 	// LoadDefaultConfig eager loads and validates *all* profiles.  Any profile errors
-	// become fatal.  Since we're already authenticated, we don't actually need any aditional
-	// information from the Config/Cred files, so we can just pass empty arrays and resolve
-	// the problem.
+	// become fatal.  Since we're already authenticated, we don't actually need any additional
+	// information from the Config/Cred files, so we pass empty arrays and anonymous credentials.
+	// AnonymousCredentials bypasses AWS_PROFILE-driven credential resolution entirely, which is
+	// correct here because AssumeRoleWithSAML authenticates via the SAML assertion, not via
+	// existing AWS credentials.
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(account.Region),
 		config.WithSharedConfigFiles([]string{}),
 		config.WithSharedCredentialsFiles([]string{}),
+		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create session.")
